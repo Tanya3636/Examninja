@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import AiAssistant from './AiAssistant';
 
 const defaultQuestions = [
   {
@@ -75,100 +76,253 @@ const defaultQuestions = [
   }
 ];
 
-function Practice({ user, onFinish, onBack }) {
-  // Load questions: admin questions from localStorage, fallback to defaults
-  const adminQuestions = JSON.parse(localStorage.getItem('examninjaQuestions') || '[]');
-  const allQuestions = adminQuestions.length > 0 ? adminQuestions : defaultQuestions;
+// ─── Adaptive Session Builder ────────────────────────────────────────────────
+// Guarantees at least 1 question from EVERY section (holistic baseline),
+// then fills remaining slots with inverse-accuracy weighting (weak areas get more).
 
+function buildAdaptiveSession(allQuestions, userHistory, sessionSize = 10) {
+  const SECTIONS = [
+    'Legal Reasoning',
+    'English Language',
+    'Logical Reasoning',
+    'Quantitative Techniques',
+    'Current Affairs'
+  ];
+
+  // Aggregate per-section accuracy from all past sessions
+  const sectionPerf = {};
+  SECTIONS.forEach(s => { sectionPerf[s] = { correct: 0, attempted: 0 }; });
+  userHistory.forEach(session => {
+    Object.entries(session.sections || {}).forEach(([section, data]) => {
+      if (sectionPerf[section]) {
+        sectionPerf[section].correct += data.correct || 0;
+        sectionPerf[section].attempted += data.attempted || 0;
+      }
+    });
+  });
+
+  const getAcc = (s) =>
+    sectionPerf[s] && sectionPerf[s].attempted > 0
+      ? sectionPerf[s].correct / sectionPerf[s].attempted
+      : null; // null = new section, no history
+
+  // Group questions by section
+  const bySection = {};
+  SECTIONS.forEach(s => { bySection[s] = allQuestions.filter(q => q.section === s); });
+  const sectionsAvailable = SECTIONS.filter(s => bySection[s].length > 0);
+
+  const selected = [];
+  const usedIds = new Set();
+
+  // STEP 1 — Holistic baseline: guarantee 1 question from every available section
+  sectionsAvailable.forEach(section => {
+    const acc = getAcc(section);
+    // Target difficulty based on accuracy: struggling → easy, mastered → hard, else medium
+    const targetDiff = acc === null ? 'medium' : acc < 0.4 ? 'easy' : acc > 0.75 ? 'hard' : 'medium';
+    const pool = bySection[section];
+    const preferred = pool.filter(q => q.difficulty === targetDiff);
+    const candidates = preferred.length > 0 ? preferred : pool;
+    const picked = candidates[Math.floor(Math.random() * candidates.length)];
+    if (picked) {
+      selected.push(picked);
+      usedIds.add(picked.id);
+    }
+  });
+
+  // STEP 2 — Weighted fill: weak sections appear more, but every section stays in play
+  const remaining = Math.max(0, sessionSize - selected.length);
+  if (remaining > 0 && sectionsAvailable.length > 0) {
+    // Inverse accuracy: lower accuracy → higher weight
+    const weights = sectionsAvailable.map(s => {
+      const acc = getAcc(s);
+      return {
+        section: s,
+        weight: acc === null ? 1.0 : Math.max(0.15, 1.4 - acc * 1.25)
+      };
+    });
+    const totalWeight = weights.reduce((sum, w) => sum + w.weight, 0);
+
+    for (let i = 0; i < remaining; i++) {
+      // Weighted random section pick
+      let rand = Math.random() * totalWeight;
+      let chosenSection = sectionsAvailable[0];
+      for (const { section, weight } of weights) {
+        rand -= weight;
+        if (rand <= 0) { chosenSection = section; break; }
+      }
+
+      const available = bySection[chosenSection].filter(q => !usedIds.has(q.id));
+      if (!available.length) continue;
+
+      const acc = getAcc(chosenSection);
+      const targetDiff = acc === null ? 'medium' : acc < 0.4 ? 'easy' : acc > 0.75 ? 'hard' : 'medium';
+      const preferred = available.filter(q => q.difficulty === targetDiff);
+      const candidates = preferred.length > 0 ? preferred : available;
+      const picked = candidates[Math.floor(Math.random() * candidates.length)];
+      if (picked) {
+        selected.push(picked);
+        usedIds.add(picked.id);
+      }
+    }
+  }
+
+  // Shuffle so sections are interleaved naturally
+  return selected.sort(() => Math.random() - 0.5);
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function getSessionQuestions(user) {
+  const adminQs = JSON.parse(localStorage.getItem('examninjaQuestions') || '[]');
+  const allQs = adminQs.length > 0 ? adminQs : defaultQuestions;
+  const history = user
+    ? JSON.parse(localStorage.getItem(`examninjaResults_${user.username}`) || '[]')
+    : [];
+  return buildAdaptiveSession(allQs, history);
+}
+
+function buildAiContext(q) {
+  if (!q) return '';
+  return [
+    `CLAT Practice — ${q.section}${q.topic ? ` | ${q.topic}` : ''}${q.difficulty ? ` | ${q.difficulty}` : ''}`,
+    q.passage ? `\nPassage:\n${q.passage}` : '',
+    q.principle ? `\nPrinciple:\n${q.principle}` : '',
+    `\nQuestion: ${q.question}`,
+    `\nOptions:\n${q.options.map((o, i) => `${['A', 'B', 'C', 'D'][i]}) ${o}`).join('\n')}`,
+    `\nCorrect Answer: ${['A', 'B', 'C', 'D'][q.correct]}) ${q.options[q.correct]}`,
+    q.explanation ? `\nExplanation: ${q.explanation}` : ''
+  ].join('');
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
+function Practice({ user, onFinish, onBack }) {
+  const [sessionQuestions, setSessionQuestions] = useState(() => getSessionQuestions(user));
   const [currentQ, setCurrentQ] = useState(0);
   const [selected, setSelected] = useState(null);
   const [showExplanation, setShowExplanation] = useState(false);
   const [score, setScore] = useState(0);
   const [finished, setFinished] = useState(false);
-  const [timeLeft, setTimeLeft] = useState(allQuestions[0]?.timeLimit || 90);
+  const [timeLeft, setTimeLeft] = useState(sessionQuestions[0]?.timeLimit || 90);
   const [answers, setAnswers] = useState([]);
+  const [aiInitialPrompt, setAiInitialPrompt] = useState('');
 
+  // Timer
   useEffect(() => {
+    if (finished) return;
     if (timeLeft === 0) {
       handleNext();
       return;
     }
     const timer = setInterval(() => setTimeLeft(prev => prev - 1), 1000);
     return () => clearInterval(timer);
-  }, [timeLeft, currentQ]); // eslint-disable-line
+  }, [timeLeft, currentQ, finished]); // eslint-disable-line
 
   const handleSelect = (index) => {
     if (selected !== null) return;
+    const q = sessionQuestions[currentQ];
+    const isCorrect = index === q.correct;
     setSelected(index);
     setShowExplanation(true);
-    const isCorrect = index === allQuestions[currentQ].correct;
     if (isCorrect) setScore(prev => prev + 1);
     setAnswers(prev => [...prev, {
       questionIndex: currentQ,
-      section: allQuestions[currentQ].section,
-      topic: allQuestions[currentQ].topic || 'General',
-      difficulty: allQuestions[currentQ].difficulty || 'medium',
+      section: q.section,
+      topic: q.topic || 'General',
+      difficulty: q.difficulty || 'medium',
       selected: index,
-      correct: allQuestions[currentQ].correct,
+      correct: q.correct,
       isCorrect
     }]);
   };
 
   const handleNext = () => {
-    if (currentQ + 1 >= allQuestions.length) {
+    if (currentQ + 1 >= sessionQuestions.length) {
       saveResults();
       setFinished(true);
     } else {
-      setCurrentQ(prev => prev + 1);
+      const next = currentQ + 1;
+      setCurrentQ(next);
       setSelected(null);
       setShowExplanation(false);
-      setTimeLeft(allQuestions[currentQ + 1]?.timeLimit || 90);
+      setTimeLeft(sessionQuestions[next]?.timeLimit || 90);
     }
   };
 
   const saveResults = () => {
     if (!user) return;
-    const finalScore = answers.filter(a => a.isCorrect).length + (selected !== null && selected === allQuestions[currentQ].correct ? 1 : 0);
-
-    // Build section and topic breakdowns
     const sections = {};
     const topics = {};
     answers.forEach(a => {
       if (!sections[a.section]) sections[a.section] = { attempted: 0, correct: 0 };
       sections[a.section].attempted++;
       if (a.isCorrect) sections[a.section].correct++;
-
       const t = a.topic || 'General';
       if (!topics[t]) topics[t] = { attempted: 0, correct: 0 };
       topics[t].attempted++;
       if (a.isCorrect) topics[t].correct++;
     });
-
     const session = {
       date: new Date().toISOString(),
-      totalQuestions: allQuestions.length,
-      correct: finalScore,
+      totalQuestions: sessionQuestions.length,
+      correct: score,
       sections,
       topics
     };
-
     const key = `examninjaResults_${user.username}`;
     const existing = JSON.parse(localStorage.getItem(key) || '[]');
     localStorage.setItem(key, JSON.stringify([...existing, session]));
   };
 
   const handleRestart = () => {
+    const newSession = getSessionQuestions(user);
+    setSessionQuestions(newSession);
     setCurrentQ(0);
     setSelected(null);
     setShowExplanation(false);
     setScore(0);
     setFinished(false);
-    setTimeLeft(allQuestions[0]?.timeLimit || 90);
+    setTimeLeft(newSession[0]?.timeLimit || 90);
     setAnswers([]);
+    setAiInitialPrompt('');
   };
 
+  // ── Empty state ──────────────────────────────────────────────────────────
+  if (sessionQuestions.length === 0) {
+    return (
+      <div style={{
+        minHeight: '100vh', background: 'linear-gradient(135deg, #0f0c29, #302b63, #24243e)',
+        color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontFamily: "'Segoe UI', sans-serif", textAlign: 'center', padding: '40px'
+      }}>
+        <div>
+          <div style={{ fontSize: '48px', marginBottom: '16px' }}>📭</div>
+          <h2 style={{ marginBottom: '12px' }}>No questions yet</h2>
+          <p style={{ color: 'rgba(255,255,255,0.5)', marginBottom: '28px' }}>
+            The admin hasn't added questions yet. Check back soon!
+          </p>
+          <button onClick={onBack} style={{
+            background: 'linear-gradient(90deg, #f7971e, #ffd200)',
+            border: 'none', borderRadius: '50px', padding: '12px 32px',
+            color: '#000', fontWeight: 'bold', cursor: 'pointer', fontSize: '15px'
+          }}>← Go Back</button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Results screen ───────────────────────────────────────────────────────
   if (finished) {
-    const pct = Math.round((score / allQuestions.length) * 100);
+    const pct = Math.round((score / sessionQuestions.length) * 100);
+
+    // Section summary
+    const sectionSummary = {};
+    answers.forEach(a => {
+      if (!sectionSummary[a.section]) sectionSummary[a.section] = { attempted: 0, correct: 0 };
+      sectionSummary[a.section].attempted++;
+      if (a.isCorrect) sectionSummary[a.section].correct++;
+    });
+
     return (
       <div style={{
         minHeight: '100vh',
@@ -177,39 +331,74 @@ function Practice({ user, onFinish, onBack }) {
         fontFamily: "'Segoe UI', sans-serif", padding: '20px'
       }}>
         <div style={{
-          textAlign: 'center', background: 'rgba(255,255,255,0.05)',
-          border: '1px solid rgba(255,255,255,0.1)', borderRadius: '24px',
-          padding: '60px', maxWidth: '500px', width: '100%'
+          background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
+          borderRadius: '24px', padding: '48px', maxWidth: '560px', width: '100%'
         }}>
-          <div style={{ fontSize: '60px', marginBottom: '20px' }}>
-            {pct >= 80 ? '🏆' : pct >= 60 ? '🥷' : '💪'}
+          <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+            <div style={{ fontSize: '56px', marginBottom: '12px' }}>
+              {pct >= 80 ? '🏆' : pct >= 60 ? '🥷' : '💪'}
+            </div>
+            <h1 style={{ fontSize: '28px', marginBottom: '8px' }}>Session Complete!</h1>
+            <div style={{
+              fontSize: '64px', fontWeight: '800',
+              background: 'linear-gradient(90deg, #f7971e, #ffd200)',
+              WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', marginBottom: '6px'
+            }}>
+              {score}/{sessionQuestions.length}
+            </div>
+            <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '14px' }}>
+              {pct >= 80 ? 'Excellent! You are a true ninja! 🔥' :
+               pct >= 60 ? 'Good work! Keep the momentum going!' :
+               'Every session makes you better. Keep going!'}
+            </p>
           </div>
-          <h1 style={{ fontSize: '32px', marginBottom: '12px' }}>Session Complete!</h1>
-          <div style={{
-            fontSize: '72px', fontWeight: '800',
-            background: 'linear-gradient(90deg, #f7971e, #ffd200)',
-            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', marginBottom: '8px'
-          }}>
-            {score}/{allQuestions.length}
-          </div>
-          <p style={{ color: 'rgba(255,255,255,0.55)', marginBottom: '28px' }}>
-            {pct >= 80 ? 'Excellent! You are a true ninja!' :
-             pct >= 60 ? 'Good work! Keep practicing!' :
-             'Keep going! Every session makes you better!'}
-          </p>
 
+          {/* Section breakdown */}
+          {Object.keys(sectionSummary).length > 0 && (
+            <div style={{
+              background: 'rgba(255,255,255,0.04)', borderRadius: '14px',
+              padding: '18px', marginBottom: '24px'
+            }}>
+              <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.4)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                Section Breakdown
+              </div>
+              {Object.entries(sectionSummary).map(([section, data]) => {
+                const secPct = Math.round((data.correct / data.attempted) * 100);
+                const color = secPct >= 70 ? '#4ade80' : secPct >= 50 ? '#fbbf24' : '#f87171';
+                return (
+                  <div key={section} style={{ marginBottom: '10px' }}>
+                    <div style={{
+                      display: 'flex', justifyContent: 'space-between',
+                      fontSize: '13px', marginBottom: '5px'
+                    }}>
+                      <span style={{ color: 'rgba(255,255,255,0.7)' }}>{section}</span>
+                      <span style={{ color }}>{data.correct}/{data.attempted}</span>
+                    </div>
+                    <div style={{ background: 'rgba(255,255,255,0.08)', borderRadius: '6px', height: '5px' }}>
+                      <div style={{
+                        width: `${secPct}%`, height: '100%', borderRadius: '6px',
+                        background: color, transition: 'width 0.4s'
+                      }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Q-by-Q summary */}
           <div style={{
-            background: 'rgba(255,255,255,0.05)', borderRadius: '14px',
-            padding: '16px', marginBottom: '28px', textAlign: 'left'
+            background: 'rgba(255,255,255,0.04)', borderRadius: '14px',
+            padding: '16px', marginBottom: '24px', maxHeight: '180px', overflowY: 'auto'
           }}>
             {answers.map((a, i) => (
               <div key={i} style={{
-                display: 'flex', justifyContent: 'space-between',
-                padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.05)',
-                fontSize: '13px', color: 'rgba(255,255,255,0.65)'
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                padding: '7px 0', borderBottom: '1px solid rgba(255,255,255,0.05)',
+                fontSize: '12px', color: 'rgba(255,255,255,0.6)'
               }}>
-                <span>Q{i + 1} — {a.section}</span>
-                <span>{a.isCorrect ? '✅ Correct' : '❌ Wrong'}</span>
+                <span>Q{i + 1} · {a.section}</span>
+                <span>{a.isCorrect ? '✅' : '❌'}</span>
               </div>
             ))}
           </div>
@@ -220,11 +409,11 @@ function Practice({ user, onFinish, onBack }) {
               border: 'none', borderRadius: '50px', padding: '14px 40px',
               color: '#000', fontWeight: 'bold', cursor: 'pointer', fontSize: '15px'
             }}>
-              Practice Again 🥷
+              New Adaptive Session 🥷
             </button>
             {user && (
               <button onClick={onFinish} style={{
-                background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)',
+                background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.15)',
                 borderRadius: '50px', padding: '14px 40px',
                 color: 'white', cursor: 'pointer', fontSize: '15px'
               }}>
@@ -233,11 +422,19 @@ function Practice({ user, onFinish, onBack }) {
             )}
           </div>
         </div>
+
+        <AiAssistant
+          context="The student just finished a CLAT practice session."
+          initialPrompt={aiInitialPrompt}
+          onInitialPromptUsed={() => setAiInitialPrompt('')}
+        />
       </div>
     );
   }
 
-  const q = allQuestions[currentQ];
+  // ── Practice screen ──────────────────────────────────────────────────────
+  const q = sessionQuestions[currentQ];
+  const answeredWrong = selected !== null && selected !== q.correct;
 
   return (
     <div style={{
@@ -248,13 +445,21 @@ function Practice({ user, onFinish, onBack }) {
       {/* Header */}
       <div style={{
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        maxWidth: '800px', margin: '0 auto 28px', padding: '0 4px'
+        maxWidth: '800px', margin: '0 auto 24px', padding: '0 4px'
       }}>
         <div style={{ fontSize: '20px', fontWeight: 'bold', cursor: 'pointer' }}
           onClick={onBack || (() => {})}>
           🥷 ExamNinja
         </div>
-        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          {user && (
+            <div style={{
+              background: 'rgba(247,151,30,0.15)', border: '1px solid rgba(247,151,30,0.3)',
+              borderRadius: '20px', padding: '5px 12px', fontSize: '12px', color: '#ffd200'
+            }}>
+              Adaptive
+            </div>
+          )}
           <div style={{
             background: 'rgba(255,255,255,0.1)', borderRadius: '20px',
             padding: '7px 14px', fontSize: '13px'
@@ -274,11 +479,11 @@ function Practice({ user, onFinish, onBack }) {
 
       {/* Progress Bar */}
       <div style={{
-        maxWidth: '800px', margin: '0 auto 28px',
+        maxWidth: '800px', margin: '0 auto 24px',
         background: 'rgba(255,255,255,0.1)', borderRadius: '10px', height: '5px'
       }}>
         <div style={{
-          width: `${(currentQ / allQuestions.length) * 100}%`, height: '100%',
+          width: `${(currentQ / sessionQuestions.length) * 100}%`, height: '100%',
           background: 'linear-gradient(90deg, #f7971e, #ffd200)',
           borderRadius: '10px', transition: 'width 0.3s'
         }} />
@@ -297,7 +502,7 @@ function Practice({ user, onFinish, onBack }) {
             border: '1px solid rgba(247,151,30,0.4)', borderRadius: '20px',
             padding: '3px 14px', fontSize: '12px', color: '#ffd200'
           }}>
-            {q.section} — Q{currentQ + 1} of {allQuestions.length}
+            {q.section} — Q{currentQ + 1} of {sessionQuestions.length}
           </div>
           {q.difficulty && (
             <div style={{
@@ -307,6 +512,15 @@ function Practice({ user, onFinish, onBack }) {
               color: q.difficulty === 'easy' ? '#4ade80' : q.difficulty === 'hard' ? '#ef4444' : '#fbbf24'
             }}>
               {q.difficulty}
+            </div>
+          )}
+          {q.topic && (
+            <div style={{
+              display: 'inline-block', background: 'rgba(255,255,255,0.07)',
+              borderRadius: '20px', padding: '3px 14px', fontSize: '12px',
+              color: 'rgba(255,255,255,0.45)'
+            }}>
+              {q.topic}
             </div>
           )}
         </div>
@@ -361,7 +575,7 @@ function Practice({ user, onFinish, onBack }) {
               <span style={{
                 display: 'inline-block', width: '26px', height: '26px', borderRadius: '50%',
                 background: 'rgba(255,255,255,0.1)', textAlign: 'center',
-                lineHeight: '26px', marginRight: '12px', fontSize: '12px'
+                lineHeight: '26px', marginRight: '12px', fontSize: '12px', flexShrink: 0
               }}>
                 {['A', 'B', 'C', 'D'][index]}
               </span>
@@ -383,18 +597,43 @@ function Practice({ user, onFinish, onBack }) {
           </div>
         )}
 
+        {/* Ask AI button — shown only after a wrong answer */}
+        {answeredWrong && (
+          <button
+            onClick={() => setAiInitialPrompt(
+              `I just got this ${q.section} question wrong. The topic is "${q.topic || q.section}". I chose option ${['A','B','C','D'][selected]}) "${q.options[selected]}" but the correct answer is ${['A','B','C','D'][q.correct]}) "${q.options[q.correct]}". Please explain step by step why my answer was wrong and how to arrive at the correct answer.`
+            )}
+            style={{
+              marginTop: '14px', width: '100%',
+              background: 'rgba(247,151,30,0.12)', border: '1px solid rgba(247,151,30,0.35)',
+              borderRadius: '12px', padding: '12px', color: '#ffd200',
+              cursor: 'pointer', fontSize: '13px', fontWeight: '600',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
+            }}
+          >
+            🤖 Ask AI to explain this
+          </button>
+        )}
+
         {/* Next Button */}
         {selected !== null && (
           <button onClick={handleNext} style={{
-            marginTop: '20px', background: 'linear-gradient(90deg, #f7971e, #ffd200)',
+            marginTop: '14px', background: 'linear-gradient(90deg, #f7971e, #ffd200)',
             border: 'none', borderRadius: '50px', padding: '14px 40px',
             color: '#000', fontWeight: 'bold', cursor: 'pointer',
             fontSize: '15px', width: '100%'
           }}>
-            {currentQ + 1 >= allQuestions.length ? 'See Results 🏆' : 'Next Question →'}
+            {currentQ + 1 >= sessionQuestions.length ? 'See Results 🏆' : 'Next Question →'}
           </button>
         )}
       </div>
+
+      {/* AI Tutor — floating, always available during practice */}
+      <AiAssistant
+        context={buildAiContext(q)}
+        initialPrompt={aiInitialPrompt}
+        onInitialPromptUsed={() => setAiInitialPrompt('')}
+      />
     </div>
   );
 }
