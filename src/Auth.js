@@ -4,6 +4,7 @@ function Auth({ onLogin, onBack }) {
   const [mode, setMode] = useState('login');
   const [name, setName] = useState('');
   const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
@@ -16,11 +17,13 @@ function Auth({ onLogin, onBack }) {
     const users = getUsers();
 
     if (mode === 'signup') {
-      if (!name || !username || !password) { setError('Please fill in all fields.'); return; }
+      if (!name || !username || !email || !password) { setError('Please fill in all fields.'); return; }
       if (username.length < 3) { setError('Username must be at least 3 characters.'); return; }
+      if (!email.includes('@')) { setError('Please enter a valid email address.'); return; }
       if (password.length < 6) { setError('Password must be at least 6 characters.'); return; }
       if (users.find(u => u.username === username)) { setError('Username already taken. Try another.'); return; }
-      const newUser = { name, username, password, createdAt: new Date().toISOString() };
+      if (users.find(u => u.email === email)) { setError('An account with this email already exists.'); return; }
+      const newUser = { name, username, email, password, createdAt: new Date().toISOString() };
       saveUsers([...users, newUser]);
       localStorage.setItem('examninjaCurrentUser', JSON.stringify(newUser));
       onLogin(newUser);
@@ -81,6 +84,16 @@ function Auth({ onLogin, onBack }) {
             type="text" placeholder="e.g. priya123" value={username}
             onChange={e => setUsername(e.target.value.toLowerCase())} style={inputStyle}
           />
+
+          {mode === 'signup' && (
+            <>
+              <label style={labelStyle}>Email Address</label>
+              <input
+                type="email" placeholder="e.g. priya@gmail.com" value={email}
+                onChange={e => setEmail(e.target.value)} style={inputStyle}
+              />
+            </>
+          )}
 
           <label style={labelStyle}>Password</label>
           <input

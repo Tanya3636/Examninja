@@ -391,6 +391,89 @@ function Admin({ onBack }) {
           )}
         </div>
 
+        {/* Registered Users */}
+        {(() => {
+          const users = JSON.parse(localStorage.getItem('examninjaUsers') || '[]');
+          return (
+            <div style={{
+              background: 'rgba(255,255,255,0.05)',
+              border: '1px solid rgba(255,255,255,0.1)',
+              borderRadius: '20px',
+              padding: '40px',
+              marginBottom: '40px'
+            }}>
+              <h2 style={{ marginBottom: '8px', fontSize: '20px' }}>
+                👥 Registered Users ({users.length})
+              </h2>
+              <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '13px', marginBottom: '24px' }}>
+                All students who have signed up on ExamNinja
+              </p>
+
+              {users.length === 0 ? (
+                <p style={{ color: 'rgba(255,255,255,0.4)', textAlign: 'center', padding: '30px 0' }}>
+                  No users yet. Share the link and get people signing up!
+                </p>
+              ) : (
+                <>
+                  {/* Export hint */}
+                  <div style={{
+                    background: 'rgba(247,151,30,0.1)', border: '1px solid rgba(247,151,30,0.2)',
+                    borderRadius: '10px', padding: '10px 16px', marginBottom: '20px', fontSize: '12px',
+                    color: 'rgba(255,255,255,0.5)'
+                  }}>
+                    💡 To export — open browser console (Cmd+Option+J) and type:{' '}
+                    <code style={{ color: '#ffd200' }}>
+                      copy(JSON.stringify(JSON.parse(localStorage.getItem('examninjaUsers')), null, 2))
+                    </code>
+                    {' '}then paste into a spreadsheet.
+                  </div>
+
+                  {/* Table header */}
+                  <div style={{
+                    display: 'grid', gridTemplateColumns: '1fr 1fr 1.5fr 1fr',
+                    gap: '12px', padding: '8px 12px', marginBottom: '8px',
+                    fontSize: '11px', color: 'rgba(255,255,255,0.35)',
+                    textTransform: 'uppercase', letterSpacing: '0.5px'
+                  }}>
+                    <span>Name</span>
+                    <span>Username</span>
+                    <span>Email</span>
+                    <span>Joined</span>
+                  </div>
+
+                  {users.map((u, i) => {
+                    const results = JSON.parse(localStorage.getItem(`examninjaResults_${u.username}`) || '[]');
+                    return (
+                      <div key={i} style={{
+                        display: 'grid', gridTemplateColumns: '1fr 1fr 1.5fr 1fr',
+                        gap: '12px', padding: '14px 12px',
+                        background: i % 2 === 0 ? 'rgba(255,255,255,0.03)' : 'transparent',
+                        borderRadius: '8px', alignItems: 'center'
+                      }}>
+                        <span style={{ fontSize: '14px', fontWeight: '500' }}>{u.name}</span>
+                        <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.55)' }}>@{u.username}</span>
+                        <span style={{ fontSize: '13px', color: '#ffd200' }}>{u.email || '—'}</span>
+                        <div>
+                          <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.4)' }}>
+                            {u.createdAt ? new Date(u.createdAt).toLocaleDateString('en-IN', {
+                              day: 'numeric', month: 'short', year: 'numeric'
+                            }) : '—'}
+                          </div>
+                          {results.length > 0 && (
+                            <div style={{ fontSize: '11px', color: '#4ade80', marginTop: '2px' }}>
+                              {results.length} session{results.length !== 1 ? 's' : ''}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </>
+              )}
+            </div>
+          );
+        })()}
+
         {/* Questions List */}
         <div style={{
           background: 'rgba(255,255,255,0.05)',
