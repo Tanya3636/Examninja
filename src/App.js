@@ -1,9 +1,21 @@
 import React, { useState } from 'react';
 import './App.css';
+import Practice from './Practice';
+import Admin from './Admin';
 
 function App() {
   const [email, setEmail] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const [showPractice, setShowPractice] = useState(false);
+  const [showAdmin, setShowAdmin] = useState(false);
+
+  if (showPractice) {
+    return <Practice />;
+  }
+
+  if (showAdmin) {
+    return <Admin onBack={() => setShowAdmin(false)} />;
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -45,16 +57,18 @@ function App() {
         <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
           <a href="#features" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none' }}>Features</a>
           <a href="#pricing" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none' }}>Pricing</a>
-          <button style={{
-            background: 'linear-gradient(90deg, #f7971e, #ffd200)',
-            border: 'none',
-            borderRadius: '25px',
-            padding: '10px 24px',
-            color: '#000',
-            fontWeight: 'bold',
-            cursor: 'pointer',
-            fontSize: '14px'
-          }}>
+          <button
+            onClick={() => setShowPractice(true)}
+            style={{
+              background: 'linear-gradient(90deg, #f7971e, #ffd200)',
+              border: 'none',
+              borderRadius: '25px',
+              padding: '10px 24px',
+              color: '#000',
+              fontWeight: 'bold',
+              cursor: 'pointer',
+              fontSize: '14px'
+            }}>
             Start Free
           </button>
         </div>
@@ -101,7 +115,6 @@ function App() {
           ExamNinja doesn't just throw questions at you. It learns how your brain works and trains you like a personal coach — so every minute you practice actually counts.
         </p>
 
-        {/* Email Signup */}
         {!submitted ? (
           <form onSubmit={handleSubmit} style={{
             display: 'flex',
@@ -249,8 +262,7 @@ function App() {
               background: 'rgba(255,255,255,0.05)',
               border: '1px solid rgba(255,255,255,0.1)',
               borderRadius: '16px',
-              padding: '32px',
-              transition: 'transform 0.2s'
+              padding: '32px'
             }}>
               <div style={{ fontSize: '36px', marginBottom: '16px' }}>{feature.icon}</div>
               <h3 style={{ fontSize: '20px', marginBottom: '12px' }}>{feature.title}</h3>
@@ -309,17 +321,19 @@ function App() {
                 ✅ {item}
               </div>
             ))}
-            <button style={{
-              width: '100%',
-              marginTop: '24px',
-              padding: '14px',
-              borderRadius: '50px',
-              border: '1px solid rgba(255,255,255,0.3)',
-              background: 'transparent',
-              color: 'white',
-              cursor: 'pointer',
-              fontSize: '16px'
-            }}>
+            <button
+              onClick={() => setShowPractice(true)}
+              style={{
+                width: '100%',
+                marginTop: '24px',
+                padding: '14px',
+                borderRadius: '50px',
+                border: '1px solid rgba(255,255,255,0.3)',
+                background: 'transparent',
+                color: 'white',
+                cursor: 'pointer',
+                fontSize: '16px'
+              }}>
               Get Started Free
             </button>
           </div>
@@ -361,18 +375,20 @@ function App() {
                 ✅ {item}
               </div>
             ))}
-            <button style={{
-              width: '100%',
-              marginTop: '24px',
-              padding: '14px',
-              borderRadius: '50px',
-              border: 'none',
-              background: 'linear-gradient(90deg, #f7971e, #ffd200)',
-              color: '#000',
-              fontWeight: 'bold',
-              cursor: 'pointer',
-              fontSize: '16px'
-            }}>
+            <button
+              onClick={() => setShowPractice(true)}
+              style={{
+                width: '100%',
+                marginTop: '24px',
+                padding: '14px',
+                borderRadius: '50px',
+                border: 'none',
+                background: 'linear-gradient(90deg, #f7971e, #ffd200)',
+                color: '#000',
+                fontWeight: 'bold',
+                cursor: 'pointer',
+                fontSize: '16px'
+              }}>
               Start Pro — ₹299/mo
             </button>
           </div>
@@ -399,17 +415,19 @@ function App() {
                 ✅ {item}
               </div>
             ))}
-            <button style={{
-              width: '100%',
-              marginTop: '24px',
-              padding: '14px',
-              borderRadius: '50px',
-              border: '1px solid rgba(255,255,255,0.3)',
-              background: 'transparent',
-              color: 'white',
-              cursor: 'pointer',
-              fontSize: '16px'
-            }}>
+            <button
+              onClick={() => setShowPractice(true)}
+              style={{
+                width: '100%',
+                marginTop: '24px',
+                padding: '14px',
+                borderRadius: '50px',
+                border: '1px solid rgba(255,255,255,0.3)',
+                background: 'transparent',
+                color: 'white',
+                cursor: 'pointer',
+                fontSize: '16px'
+              }}>
               Get Yearly — ₹1,999
             </button>
           </div>
@@ -436,16 +454,18 @@ function App() {
         }}>
           Join thousands of aspirants training smarter, not harder.
         </p>
-        <button style={{
-          background: 'linear-gradient(90deg, #f7971e, #ffd200)',
-          border: 'none',
-          borderRadius: '50px',
-          padding: '18px 48px',
-          color: '#000',
-          fontWeight: 'bold',
-          cursor: 'pointer',
-          fontSize: '18px'
-        }}>
+        <button
+          onClick={() => setShowPractice(true)}
+          style={{
+            background: 'linear-gradient(90deg, #f7971e, #ffd200)',
+            border: 'none',
+            borderRadius: '50px',
+            padding: '18px 48px',
+            color: '#000',
+            fontWeight: 'bold',
+            cursor: 'pointer',
+            fontSize: '18px'
+          }}>
           Start Free Today 🥷
         </button>
       </section>
@@ -459,6 +479,12 @@ function App() {
         fontSize: '14px'
       }}>
         © 2026 ExamNinja. Built with 💛 in India.
+        <span
+          onClick={() => setShowAdmin(true)}
+          style={{ marginLeft: '20px', cursor: 'pointer', opacity: 0.1 }}
+        >
+          &middot;
+        </span>
       </footer>
 
     </div>
