@@ -1,6 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import AiAssistant from './AiAssistant';
 
+// ─── Launch Gate ─────────────────────────────────────────────────────────────
+// Set to false on September 1 to unlock the full platform.
+const PRE_LAUNCH = true;
+const LAUNCH_DATE = 'September 1, 2026';
+const FREE_QUESTION_LIMIT = 10;
+
 // ─── Default Passage Sets ────────────────────────────────────────────────────
 const defaultSets = [
   {
@@ -355,7 +361,8 @@ function Practice({ user, onFinish, onBack }) {
   };
 
   const startSession = () => {
-    const sets = buildAdaptiveSession(allSets, history, targetQuestions);
+    const effectiveTarget = PRE_LAUNCH ? FREE_QUESTION_LIMIT : targetQuestions;
+    const sets = buildAdaptiveSession(allSets, history, effectiveTarget);
     setSessionSets(sets);
     setCurrentSetIdx(0);
     setCurrentQIdx(0);
@@ -381,10 +388,27 @@ function Practice({ user, onFinish, onBack }) {
   // ════════════════════════════════════════════════════════════════════════════
   if (phase === 'setup') {
     const options = [
-      { count: 20, label: 'Quick', emoji: '⚡', desc: '~20 minutes', note: 'Great for a daily warm-up' },
-      { count: 30, label: 'Standard', emoji: '🎯', desc: '~30 minutes', note: 'The recommended session length' },
-      { count: 40, label: 'Deep Dive', emoji: '🔥', desc: '~40 minutes', note: 'Full CLAT-intensity workout' },
+      {
+        count: 20,
+        label: PRE_LAUNCH ? 'Free Preview' : 'Quick',
+        emoji: '⚡',
+        desc: PRE_LAUNCH ? `${FREE_QUESTION_LIMIT} questions · ~10 minutes` : '~20 minutes',
+        note: PRE_LAUNCH ? 'Try ExamNinja before launch' : 'Great for a daily warm-up',
+        locked: false,
+        displayCount: PRE_LAUNCH ? FREE_QUESTION_LIMIT : 20
+      },
+      {
+        count: 30, label: 'Standard', emoji: '🎯',
+        desc: '~30 minutes', note: 'The recommended session length',
+        locked: PRE_LAUNCH, displayCount: 30
+      },
+      {
+        count: 40, label: 'Deep Dive', emoji: '🔥',
+        desc: '~40 minutes', note: 'Full CLAT-intensity workout',
+        locked: PRE_LAUNCH, displayCount: 40
+      },
     ];
+
     return (
       <div style={{
         minHeight: '100vh', background: 'linear-gradient(135deg, #0f0c29, #302b63, #24243e)',
@@ -402,58 +426,89 @@ function Practice({ user, onFinish, onBack }) {
           <div style={{ textAlign: 'center', marginBottom: '40px' }}>
             <div style={{ fontSize: '52px', marginBottom: '14px' }}>🥷</div>
             <h1 style={{ fontSize: '26px', fontWeight: '800', marginBottom: '8px' }}>
-              Choose Your Session
+              {PRE_LAUNCH ? 'Try ExamNinja Free' : 'Choose Your Session'}
             </h1>
             <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '14px' }}>
-              Questions are adapted to your weak areas across all 5 CLAT sections.
+              {PRE_LAUNCH
+                ? `${FREE_QUESTION_LIMIT} adaptive questions, completely free. Full platform launches ${LAUNCH_DATE}.`
+                : 'Questions are adapted to your weak areas across all 5 CLAT sections.'}
             </p>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '32px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '28px' }}>
             {options.map(opt => (
-              <button key={opt.count} onClick={() => setTargetQuestions(opt.count)} style={{
-                background: targetQuestions === opt.count
-                  ? 'linear-gradient(135deg, rgba(247,151,30,0.25), rgba(255,210,0,0.15))'
-                  : 'rgba(255,255,255,0.04)',
-                border: targetQuestions === opt.count
-                  ? '2px solid rgba(247,151,30,0.7)'
-                  : '2px solid rgba(255,255,255,0.09)',
-                borderRadius: '16px', padding: '18px 22px', cursor: 'pointer',
-                display: 'flex', alignItems: 'center', gap: '16px', textAlign: 'left',
-                transition: 'all 0.15s'
-              }}>
+              <button
+                key={opt.count}
+                onClick={() => !opt.locked && setTargetQuestions(opt.count)}
+                style={{
+                  background: opt.locked
+                    ? 'rgba(255,255,255,0.02)'
+                    : targetQuestions === opt.count
+                    ? 'linear-gradient(135deg, rgba(247,151,30,0.25), rgba(255,210,0,0.15))'
+                    : 'rgba(255,255,255,0.04)',
+                  border: opt.locked
+                    ? '2px solid rgba(255,255,255,0.06)'
+                    : targetQuestions === opt.count
+                    ? '2px solid rgba(247,151,30,0.7)'
+                    : '2px solid rgba(255,255,255,0.09)',
+                  borderRadius: '16px', padding: '18px 22px',
+                  cursor: opt.locked ? 'default' : 'pointer',
+                  display: 'flex', alignItems: 'center', gap: '16px', textAlign: 'left',
+                  transition: 'all 0.15s', opacity: opt.locked ? 0.45 : 1
+                }}>
                 <span style={{ fontSize: '28px' }}>{opt.emoji}</span>
                 <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                    <span style={{ fontSize: '16px', fontWeight: '700', color: 'white' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '16px', fontWeight: '700', color: opt.locked ? 'rgba(255,255,255,0.4)' : 'white' }}>
                       {opt.label}
                     </span>
-                    <span style={{
-                      fontSize: '20px', fontWeight: '800',
-                      background: 'linear-gradient(90deg, #f7971e, #ffd200)',
-                      WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent'
-                    }}>
-                      {opt.count} Q
-                    </span>
+                    {opt.locked ? (
+                      <span style={{
+                        fontSize: '11px', fontWeight: '700', color: '#a78bfa',
+                        background: 'rgba(167,139,250,0.12)', border: '1px solid rgba(167,139,250,0.25)',
+                        borderRadius: '20px', padding: '3px 10px'
+                      }}>
+                        🔒 Sept 1
+                      </span>
+                    ) : (
+                      <span style={{
+                        fontSize: '20px', fontWeight: '800',
+                        background: 'linear-gradient(90deg, #f7971e, #ffd200)',
+                        WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent'
+                      }}>
+                        {opt.displayCount} Q
+                      </span>
+                    )}
                   </div>
-                  <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.45)', marginTop: '3px' }}>
+                  <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.4)', marginTop: '3px' }}>
                     {opt.desc} · {opt.note}
                   </div>
                 </div>
-                {targetQuestions === opt.count && (
-                  <span style={{ fontSize: '18px' }}>✓</span>
+                {!opt.locked && targetQuestions === opt.count && (
+                  <span style={{ fontSize: '18px', color: '#ffd200' }}>✓</span>
                 )}
               </button>
             ))}
           </div>
+
+          {PRE_LAUNCH && (
+            <div style={{
+              background: 'rgba(167,139,250,0.08)', border: '1px solid rgba(167,139,250,0.2)',
+              borderRadius: '12px', padding: '14px 18px', marginBottom: '20px',
+              fontSize: '12px', color: 'rgba(167,139,250,0.9)', lineHeight: '1.65'
+            }}>
+              🚀 Full platform — 30 & 40 question sessions, all sections, AI Tutor — launches <strong>{LAUNCH_DATE}</strong>.
+              You're already on the list.
+            </div>
+          )}
 
           <div style={{
             background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
             borderRadius: '12px', padding: '14px 18px', marginBottom: '24px',
             fontSize: '12px', color: 'rgba(255,255,255,0.4)', lineHeight: '1.6'
           }}>
-            💡 Answers are revealed only <strong style={{ color: 'rgba(255,255,255,0.65)' }}>after</strong> your full session ends.
-            You can review all questions with detailed explanations at the end.
+            💡 Answers are revealed only <strong style={{ color: 'rgba(255,255,255,0.65)' }}>after</strong> your session ends.
+            Review every question with detailed explanations at the end.
           </div>
 
           <button onClick={startSession} style={{
@@ -462,7 +517,7 @@ function Practice({ user, onFinish, onBack }) {
             color: '#000', fontWeight: '800', cursor: 'pointer', fontSize: '16px',
             letterSpacing: '0.3px'
           }}>
-            Start {targetQuestions}-Question Session 🥷
+            {PRE_LAUNCH ? `Start Free Preview 🥷` : `Start ${targetQuestions}-Question Session 🥷`}
           </button>
         </div>
       </div>
@@ -760,6 +815,25 @@ function Practice({ user, onFinish, onBack }) {
             )}
           </div>
 
+          {/* Pre-launch upsell */}
+          {PRE_LAUNCH && (
+            <div style={{
+              background: 'linear-gradient(135deg, rgba(167,139,250,0.12), rgba(96,165,250,0.08))',
+              border: '1px solid rgba(167,139,250,0.3)',
+              borderRadius: '16px', padding: '20px 22px', marginBottom: '16px',
+              textAlign: 'center'
+            }}>
+              <div style={{ fontSize: '24px', marginBottom: '8px' }}>🚀</div>
+              <div style={{ fontSize: '15px', fontWeight: '700', marginBottom: '6px', color: 'white' }}>
+                Full platform launches {LAUNCH_DATE}
+              </div>
+              <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)', lineHeight: '1.6' }}>
+                30 & 40 question adaptive sessions · All 5 sections · AI Tutor · Full mock tests.
+                You're on the list — we'll notify you on launch day.
+              </div>
+            </div>
+          )}
+
           {/* CTA buttons */}
           <button onClick={() => { setReviewIdx(0); setPhase('review'); }} style={{
             width: '100%', background: 'linear-gradient(90deg, #f7971e, #ffd200)',
@@ -774,7 +848,7 @@ function Practice({ user, onFinish, onBack }) {
               flex: 1, background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.14)',
               borderRadius: '50px', padding: '13px', color: 'white', cursor: 'pointer', fontSize: '14px', fontWeight: '600'
             }}>
-              New Session 🥷
+              {PRE_LAUNCH ? 'Try Again 🥷' : 'New Session 🥷'}
             </button>
             {user && (
               <button onClick={onFinish} style={{
