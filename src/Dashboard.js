@@ -1,6 +1,6 @@
 import React from 'react';
 
-function Dashboard({ user, onStartPractice, onLogout }) {
+function Dashboard({ user, onStartPractice, onStartMockTest, onStartTutor, onLogout }) {
   const results = JSON.parse(localStorage.getItem(`examninjaResults_${user.username}`) || '[]');
 
   const totalSessions = results.length;
@@ -62,13 +62,27 @@ function Dashboard({ user, onStartPractice, onLogout }) {
               Welcome back, {user.name} 👋
             </div>
           </div>
-          <div style={{ display: 'flex', gap: '10px' }}>
+          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
             <button onClick={onStartPractice} style={{
               background: 'linear-gradient(90deg, #f7971e, #ffd200)',
               border: 'none', borderRadius: '25px', padding: '10px 22px',
               color: '#000', fontWeight: 'bold', cursor: 'pointer', fontSize: '14px'
             }}>
               Practice Now 🥷
+            </button>
+            <button onClick={onStartMockTest} style={{
+              background: 'rgba(96,165,250,0.15)', border: '1px solid rgba(96,165,250,0.4)',
+              borderRadius: '25px', padding: '10px 18px', color: '#60a5fa',
+              cursor: 'pointer', fontSize: '13px', fontWeight: '600'
+            }}>
+              📝 Full Mock Test
+            </button>
+            <button onClick={onStartTutor} style={{
+              background: 'rgba(247,151,30,0.15)', border: '1px solid rgba(247,151,30,0.4)',
+              borderRadius: '25px', padding: '10px 18px', color: '#ffd200',
+              cursor: 'pointer', fontSize: '13px', fontWeight: '600'
+            }}>
+              🤖 AI Tutor
             </button>
             <button onClick={onLogout} style={{
               background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)',
@@ -92,13 +106,29 @@ function Dashboard({ user, onStartPractice, onLogout }) {
             <p style={{ color: 'rgba(255,255,255,0.45)', marginBottom: '32px', fontSize: '15px' }}>
               Complete your first practice session to see your performance dashboard.
             </p>
-            <button onClick={onStartPractice} style={{
-              background: 'linear-gradient(90deg, #f7971e, #ffd200)',
-              border: 'none', borderRadius: '50px', padding: '16px 48px',
-              color: '#000', fontWeight: 'bold', cursor: 'pointer', fontSize: '17px'
-            }}>
-              Start First Session 🥷
-            </button>
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
+              <button onClick={onStartPractice} style={{
+                background: 'linear-gradient(90deg, #f7971e, #ffd200)',
+                border: 'none', borderRadius: '50px', padding: '16px 48px',
+                color: '#000', fontWeight: 'bold', cursor: 'pointer', fontSize: '17px'
+              }}>
+                Start First Session 🥷
+              </button>
+              <button onClick={onStartMockTest} style={{
+                background: 'rgba(96,165,250,0.15)', border: '1px solid rgba(96,165,250,0.4)',
+                borderRadius: '50px', padding: '16px 36px', color: '#60a5fa',
+                cursor: 'pointer', fontSize: '15px', fontWeight: '600'
+              }}>
+                📝 Try Full Mock Test
+              </button>
+              <button onClick={onStartTutor} style={{
+                background: 'rgba(247,151,30,0.15)', border: '1px solid rgba(247,151,30,0.4)',
+                borderRadius: '50px', padding: '16px 36px', color: '#ffd200',
+                cursor: 'pointer', fontSize: '15px', fontWeight: '600'
+              }}>
+                🤖 Ask AI Tutor
+              </button>
+            </div>
           </div>
         ) : (
           <>
@@ -236,13 +266,32 @@ function Dashboard({ user, onStartPractice, onLogout }) {
                   </div>
                 );
               })}
-              <button onClick={onStartPractice} style={{
-                width: '100%', marginTop: '20px', padding: '13px', borderRadius: '50px',
-                border: 'none', background: 'linear-gradient(90deg, #f7971e, #ffd200)',
-                color: '#000', fontWeight: 'bold', cursor: 'pointer', fontSize: '15px'
-              }}>
-                Start New Session 🥷
-              </button>
+              <div style={{ display: 'flex', gap: '10px', marginTop: '20px', flexWrap: 'wrap' }}>
+                <button onClick={onStartPractice} style={{
+                  flex: 1, padding: '13px', borderRadius: '50px',
+                  border: 'none', background: 'linear-gradient(90deg, #f7971e, #ffd200)',
+                  color: '#000', fontWeight: 'bold', cursor: 'pointer', fontSize: '14px',
+                  minWidth: '120px'
+                }}>
+                  Practice 🥷
+                </button>
+                <button onClick={onStartMockTest} style={{
+                  flex: 1, padding: '13px', borderRadius: '50px',
+                  background: 'rgba(96,165,250,0.15)', border: '1px solid rgba(96,165,250,0.4)',
+                  color: '#60a5fa', cursor: 'pointer', fontSize: '14px', fontWeight: '600',
+                  minWidth: '120px'
+                }}>
+                  📝 Mock Test
+                </button>
+                <button onClick={onStartTutor} style={{
+                  flex: 1, padding: '13px', borderRadius: '50px',
+                  background: 'rgba(247,151,30,0.15)', border: '1px solid rgba(247,151,30,0.4)',
+                  color: '#ffd200', cursor: 'pointer', fontSize: '14px', fontWeight: '600',
+                  minWidth: '120px'
+                }}>
+                  🤖 AI Tutor
+                </button>
+              </div>
             </div>
           </>
         )}

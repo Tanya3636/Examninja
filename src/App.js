@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import './App.css';
 import Practice from './Practice';
+import MockTest from './MockTest';
 import Admin from './Admin';
 import Auth from './Auth';
 import Dashboard from './Dashboard';
+import AiTutor from './AiTutor';
 
 function App() {
   const [email, setEmail] = useState('');
   const [submitted, setSubmitted] = useState(false);
-  const [page, setPage] = useState('landing'); // landing | auth | dashboard | practice | admin
+  const [page, setPage] = useState('landing'); // landing | auth | dashboard | practice | mocktest | admin
   const [currentUser, setCurrentUser] = useState(null);
 
   // Check if user is already logged in on load
@@ -41,10 +43,15 @@ function App() {
   // Page routing
   if (page === 'admin') return <Admin onBack={() => setPage('landing')} />;
   if (page === 'auth') return <Auth onLogin={handleLogin} onBack={() => setPage('landing')} />;
+  if (page === 'aitutor') return (
+    <AiTutor user={currentUser} onBack={() => setPage(currentUser ? 'dashboard' : 'landing')} />
+  );
   if (page === 'dashboard') return (
     <Dashboard
       user={currentUser}
       onStartPractice={() => setPage('practice')}
+      onStartMockTest={() => setPage('mocktest')}
+      onStartTutor={() => setPage('aitutor')}
       onLogout={handleLogout}
     />
   );
@@ -53,6 +60,13 @@ function App() {
       user={currentUser}
       onFinish={() => setPage('dashboard')}
       onBack={() => currentUser ? setPage('dashboard') : setPage('landing')}
+    />
+  );
+  if (page === 'mocktest') return (
+    <MockTest
+      user={currentUser}
+      onFinish={() => setPage('dashboard')}
+      onBack={() => setPage('dashboard')}
     />
   );
 
