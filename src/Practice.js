@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import AiAssistant from './AiAssistant';
+import questionBank from './questions';
 
 // ─── Launch Gate ─────────────────────────────────────────────────────────────
 // Set to false on September 1 to unlock the full platform.
@@ -7,7 +8,7 @@ const PRE_LAUNCH = true;
 const LAUNCH_DATE = 'September 1, 2026';
 const FREE_QUESTION_LIMIT = 10;
 
-// ─── Default Passage Sets ────────────────────────────────────────────────────
+// ─── Legacy Default Passage Sets (kept as fallback) ─────────────────────────
 const defaultSets = [
   {
     id: 1,
@@ -267,8 +268,12 @@ function Practice({ user, onFinish, onBack }) {
   const [reviewIdx, setReviewIdx] = useState(0);
   const [aiInitialPrompt, setAiInitialPrompt] = useState('');
 
-  const allSetsRaw = JSON.parse(localStorage.getItem('examninjaQuestions') || '[]');
-  const allSets = normalizeData(allSetsRaw.length > 0 ? allSetsRaw : defaultSets);
+  // Merge: admin-added questions (localStorage) + built-in question bank
+  const adminSetsRaw = JSON.parse(localStorage.getItem('examninjaQuestions') || '[]');
+  const adminSets = normalizeData(adminSetsRaw);
+  const allSets = adminSets.length > 0
+    ? [...questionBank, ...adminSets]  // built-in first, admin additions appended
+    : questionBank;
   const history = user ? JSON.parse(localStorage.getItem(`examninjaResults_${user.username}`) || '[]') : [];
 
   const currentSet = sessionSets[currentSetIdx];
